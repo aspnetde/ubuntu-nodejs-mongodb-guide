@@ -2,24 +2,28 @@
 
 This little guide shows how to set up an Ubuntu Server that is dedicated to run a single website with Node.js and MongoDB. If you are looking for a more generic solution to run multiple websites on a single server, take a look at the [Node.js Web Server Guide](https://github.com/aspnetde/nodejs-webserver-guide). It provides some more details to security aspects which don't matter if there is only one application running.
 
-## Create your Droplet (DigitalOcean only)
+## Prepare your Droplet (DigitalOcean only)
 
 I won't tell you how to create a Droplet, because it seems self-explaining to me. If you need any help with this, this little tutorial isn't the thing you should read anyway, at least yet ;-).
+
+# Prepare a new SSH key
+
+You can use a pre-existing SSH key if you want, but it is safer to mess around with a new SSH. Read how you can [create a new SSH key for your server.](https://help.github.com/articles/generating-ssh-keys/).
 
 ## Create a User called www
 
 You could run all your stuff as root, but I don't think that's a good idea. So connect to your only just created server and log in via root:
 
 	ssh root@{ip-address}
-	
+
 Next, create a the www user:
 
 	adduser www
-	
+
 Now provide root privilige, (Other than the root account the www user won't run with these priviliges all the time, but it could when requested, what will be necessary at least during the installation process.)
 
 Call `visudo` and add the following line right below the root's line:
-	
+
 	www ALL=(ALL:ALL) ALL
 
 Now `exit` your ssh connection and re-connect as www.
@@ -28,12 +32,18 @@ Now `exit` your ssh connection and re-connect as www.
 
 	cat ~/.ssh/id_rsa.pub | ssh www@{ip-address} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 
-	
+
 At this point you should be requested to provide the password of the www user at login for the last time. `exit` and reconnect – now you should be authenticating via SSH Key.
 
 	ssh www@{ip-address}
-	
+
 ## Install the required software
+
+### Update Ubuntu
+
+Run:
+
+	sudo apt-get update
 
 ### Make Tools
 
@@ -46,13 +56,13 @@ The make tools are essential to build some npm packages and other stuff. So it�
 ### nginx
 
 	sudo apt-get install nginx
-	
+
 Once the setup of nginx is complete, you should be able to call http://{server_ip} and see the default page with the “Welcome to nginx!” headline.
 
 Also make sure the server starts automatically after booting the system (Should be enabled by default):
 
 	sudo update-rc.d nginx defaults
-	
+
 ### Node.js
 
 If not installed with the initial creation of your droplet (DigitalOcean only; workes just fine!), use this:
@@ -64,9 +74,13 @@ If not installed with the initial creation of your droplet (DigitalOcean only; w
 
 	# Use latest Node.JS version
 	nvm install v0.11.13
-	
+
 	# Make it default
 	nvm use default v0.11.13
+
+### Change ownership of npm
+
+	sudo chown -R $(whoami) ~/.npm
 
 ### Bower
 
@@ -82,7 +96,7 @@ PM2 helps to run the node application by logging errors, restarting after crashi
 
 Glances can be used to monitor the overall state of the server.
 
-	sudo apt-get install python-pip build-essential python-dev
+	sudo apt-get install python-pip python-dev
 	sudo pip install Glances
 	sudo pip install PySensors
 
@@ -128,7 +142,7 @@ Website root | /var/www/www
 	sudo chown www www
 	cd www
 	mkdir repo && mkdir www
-	
+
 ### Create a Git repository
 
 In `/var/www/repo` run
@@ -142,7 +156,7 @@ This hook is used to deploy changes made to the master repository. It can be cus
 Go to `/var/www/repo/hooks` and create a new file called “post-receive”:
 
 	vi post-receive
-	
+
 Add the following commands to it:
 
 	#!/bin/bash
@@ -159,21 +173,21 @@ Add the following commands to it:
 
 	if [[ $branch =~ .*/master$ ]];
 	then
-    	echo "Master received. Deploying to production..."
+		echo "Master received. Deploying to production..."
 
-    	# Creates a temporary working directory
-	    mkdir $PREPARATION_DIR
+		# Creates a temporary working directory
+		mkdir $PREPARATION_DIR
 
-    	# Checks out the master from the repository
-	    GIT_WORK_TREE="$PREPARATION_DIR" git checkout -f
+		# Checks out the master from the repository
+		GIT_WORK_TREE="$PREPARATION_DIR" git checkout -f
 
-    	# Installing all npm and bower modules/packages
-	    cd $PREPARATION_DIR
-	    npm install
-	    bower install
+		# Installing all npm and bower modules/packages
+		cd $PREPARATION_DIR
+		npm install
+		bower install
 
-	    # Removes all files in the Website's root
-    	cd $WEBSITE_ROOT
+		# Removes all files in the Website's root
+  	cd $WEBSITE_ROOT
 		rm -rf *
 
 		# Copies all files over
@@ -186,7 +200,7 @@ Add the following commands to it:
 		# Removes the preparation directory
 		rm -R $PREPARATION_DIR
 	else
-    	echo "$branch successfully received. Nothing to do: only the master branch may be deployed on this server."
+		echo "$branch successfully received. Nothing to do: only the master branch may be deployed on this server."
 	fi
 
 	echo "Deployment finished"
@@ -212,16 +226,16 @@ Make sure the user you’re connecting with has the necessary rights to run the 
 To start pm2 with the system:
 
 	pm2 startup ubuntu
-	
+
 PM2 will tell you, you have to run this command as root, and print the full command to execute, for example:
 
 	sudo env PATH=$PATH:/usr/local/bin pm2 startup ubuntu -u www
-	
+
 Run it :-).
 
-#### Start your application 
+#### Start your application
 
-	cd /var/www/website-com/www/
+	cd /var/www/www/
 	pm2 start app.js --name "website-com"
 
 If everything works PM2 reponds with `Process {nameofstarting.js}` launched. Wait a few seconds and use
@@ -314,7 +328,7 @@ Create the script `/var/backup/create-backup-for-www` and make it executable:
 
 	BACKUP_TARGET_ROOT="/var/backup/www"
 	CURRENT_BACKUP_TARGET="$BACKUP_TARGET_ROOT/$(uuidgen)"
-	
+
 	cd $BACKUP_TARGET_ROOT
 	rm -rf `ls -t | tail -n +7`
 
@@ -325,7 +339,7 @@ Create the script `/var/backup/create-backup-for-www` and make it executable:
 	rm -rf  $CURRENT_BACKUP_TARGET
 
 	echo "WWW Backup finished"
-	
+
 ### nginx
 
 Create the script `/var/backup/create-backup-for-nginx` and make it executable:
@@ -354,7 +368,7 @@ Create the script `/var/backup/create-backup-for-nginx` and make it executable:
 
 There are many ways to transfer these backup files to another server, I have chosen the way to use rsync over SSH.
 
-### Set up SSH 
+### Set up SSH
 
 First create a local key without a password:
 
@@ -363,14 +377,14 @@ First create a local key without a password:
 Now get the public key and copy it:
 
 	vi ~/.ssh/id_rsa.pub
-	
+
 On your backup server add the public SSH key of your web server. If you did not set up SSH before, do it as follows:
 
 	mkdir ~/.ssh
 	chmod 0700 ~/.ssh
 	touch ~/.ssh/authorized_keys
 	chmod 0644 ~/.ssh/authorized_keys
-	
+
 	# Paste the public key here:
 	vi ~/.ssh/authorized_keys
 
@@ -394,7 +408,7 @@ Create a script that combines all backup actions and that finally transfers ever
 
 ### Schedule backup
 
-	sudo vi /etc/crontab 
+	sudo vi /etc/crontab
 
 Set:
 
@@ -411,5 +425,5 @@ If it doesn't work, check your timezone. If it is set wrong, you can change it e
 	sudo dpkg-reconfigure tzdata
 
 Now restart cron to apply the new setting:
-	
+
 	sudo service cron restart
